@@ -31,6 +31,7 @@ from tenacity import retry, stop_after_attempt, retry_if_exception
 
 from breathing_led import BreathingLed
 from push_button import PushButton
+from boot_sound import BootSound
 
 try:
     from . import (
@@ -114,12 +115,12 @@ class SampleAssistant(object):
             for c in self.gen_converse_requests():
                 assistant_helpers.log_converse_request_without_audio(c)
                 yield c
+
             self.conversation_stream.start_playback()
 
         # This generator yields ConverseResponse proto messages
         # received from the gRPC Google Assistant API.
-        for resp in self.assistant.Converse(iter_converse_requests(),
-                                            self.deadline):
+        for resp in self.assistant.Converse(iter_converse_requests(), self.deadline):
             assistant_helpers.log_converse_response_without_audio(resp)
             if resp.error.code != code_pb2.OK:
                 logging.error('server error: %s', resp.error.message)
@@ -129,16 +130,11 @@ class SampleAssistant(object):
                 self.conversation_stream.stop_recording()
                 red_breathing_led.stop()
             if resp.result.spoken_request_text:
-                logging.info('Transcript of user request: "%s".',
-                             resp.result.spoken_request_text)
-                logging.info('Playing assistant response.')
+                self.print_spoken_request(resp)
             if len(resp.audio_out.audio_data) > 0:
                 self.conversation_stream.write(resp.audio_out.audio_data)
             if resp.result.spoken_response_text:
-                logging.info(
-                    'Transcript of TTS response '
-                    '(only populated from IFTTT): "%s".',
-                    resp.result.spoken_response_text)
+                self.print_response(resp)
             if resp.result.conversation_state:
                 self.conversation_state = resp.result.conversation_state
             if resp.result.volume_percentage != 0:
@@ -153,6 +149,15 @@ class SampleAssistant(object):
         logging.info('Finished playing assistant response.')
         self.conversation_stream.stop_playback()
         return continue_conversation
+
+    @staticmethod
+    def print_spoken_request(resp):
+        logging.info('Transcript of user request: "%s".', resp.result.spoken_request_text)
+        logging.info('Playing assistant response.')
+
+    @staticmethod
+    def print_response(resp):
+        logging.info('Transcript of TTS response (only populated from IFTTT): "%s".', resp.result.spoken_response_text)
 
     def gen_converse_requests(self):
         """Yields: ConverseRequest messages to send to the API."""
@@ -190,157 +195,90 @@ class SampleAssistant(object):
               help='Address of Google Assistant API service.')
 @click.option('--credentials',
               metavar='<credentials>', show_default=True,
-              default=os.path.join(click.get_app_dir('google-oauthlib-tool'),
-                                   'credentials.json'),
+              default=os.path.join(click.get_app_dir('google-oauthlib-tool'), 'credentials.json'),
               help='Path to read OAuth2 credentials.')
 @click.option('--verbose', '-v', is_flag=True, default=False,
               help='Verbose logging.')
-@click.option('--input-audio-file', '-i',
-              metavar='<input file>',
-              help='Path to input audio file. '
-                   'If missing, uses audio capture')
-@click.option('--output-audio-file', '-o',
-              metavar='<output file>',
-              help='Path to output audio file. '
-                   'If missing, uses audio playback')
-@click.option('--audio-sample-rate',
-              default=audio_helpers.DEFAULT_AUDIO_SAMPLE_RATE,
-              metavar='<audio sample rate>', show_default=True,
-              help='Audio sample rate in hertz.')
-@click.option('--audio-sample-width',
-              default=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
-              metavar='<audio sample width>', show_default=True,
-              help='Audio sample width in bytes.')
-@click.option('--audio-iter-size',
-              default=audio_helpers.DEFAULT_AUDIO_ITER_SIZE,
-              metavar='<audio iter size>', show_default=True,
-              help='Size of each read during audio stream iteration in bytes.')
-@click.option('--audio-block-size',
-              default=audio_helpers.DEFAULT_AUDIO_DEVICE_BLOCK_SIZE,
-              metavar='<audio block size>', show_default=True,
-              help=('Block size in bytes for each audio device '
-                    'read and write operation..'))
-@click.option('--audio-flush-size',
-              default=audio_helpers.DEFAULT_AUDIO_DEVICE_FLUSH_SIZE,
-              metavar='<audio flush size>', show_default=True,
-              help=('Size of silence data in bytes written '
-                    'during flush operation'))
-@click.option('--grpc-deadline', default=DEFAULT_GRPC_DEADLINE,
-              metavar='<grpc deadline>', show_default=True,
-              help='gRPC deadline in seconds')
-@click.option('--once', default=False, is_flag=True,
-              help='Force termination after a single conversation.')
-def main(api_endpoint, credentials, verbose,
-         input_audio_file, output_audio_file,
-         audio_sample_rate, audio_sample_width,
-         audio_iter_size, audio_block_size, audio_flush_size,
-         grpc_deadline, once, *args, **kwargs):
-    """Samples for the Google Assistant API.
-
-    Examples:
-      Run the sample with microphone input and speaker output:
-
-        $ python -m googlesamples.assistant
-
-      Run the sample with file input and speaker output:
-
-        $ python -m googlesamples.assistant -i <input file>
-
-      Run the sample with file input and output:
-
-        $ python -m googlesamples.assistant -i <input file> -o <output file>
-    """
+@click.option('--no-boot-sound', default=False, is_flag=True,
+              help='Stop playing boot sound')
+@click.option('--boot-sound', '-bs', default=BootSound.DEFAULT_BOOT_FILE,
+              metavar='<boot sound>',
+              is_flag=False,
+              help='Boot sound to play')
+def main(
+        verbose,
+        no_boot_sound,
+        boot_sound,
+        *args, **kwargs
+):
     # Setup logging.
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
+    # play on boot
+    if no_boot_sound:
+        logging.info('Not playing boot sound')
+    else:
+        BootSound(boot_sound).play()
+
     # Load OAuth 2.0 credentials.
+    credentials = os.path.join(click.get_app_dir('google-oauthlib-tool'), 'credentials.json')
     try:
-        with open(credentials, 'r') as f:
-            credentials = google.oauth2.credentials.Credentials(token=None,
-                                                                **json.load(f))
+        with open(credentials, 'r') as credential_files:
+            credentials = google.oauth2.credentials.Credentials(token=None, **json.load(credential_files))
             http_request = google.auth.transport.requests.Request()
             credentials.refresh(http_request)
     except Exception as e:
-        logging.error('Error loading credentials: %s', e)
-        logging.error('Run google-oauthlib-tool to initialize '
-                      'new OAuth 2.0 credentials.')
+        print_credentials_error(e)
         return
 
     # Create an authorized gRPC channel.
     grpc_channel = google.auth.transport.grpc.secure_authorized_channel(
-        credentials, http_request, api_endpoint)
-    logging.info('Connecting to %s', api_endpoint)
+        credentials, http_request,
+        ASSISTANT_API_ENDPOINT
+    )
+    logging.info('Connecting to %s', ASSISTANT_API_ENDPOINT)
 
     # Configure audio source and sink.
     audio_device = None
-    if input_audio_file:
-        audio_source = audio_helpers.WaveSource(
-            open(input_audio_file, 'rb'),
-            sample_rate=audio_sample_rate,
-            sample_width=audio_sample_width
+    audio_source = audio_device = (
+        audio_device or audio_helpers.SoundDeviceStream(
+            sample_rate=audio_helpers.DEFAULT_AUDIO_SAMPLE_RATE,
+            sample_width=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
+            block_size=audio_helpers.DEFAULT_AUDIO_DEVICE_BLOCK_SIZE,
+            flush_size=audio_helpers.DEFAULT_AUDIO_DEVICE_FLUSH_SIZE
         )
-    else:
-        audio_source = audio_device = (
-            audio_device or audio_helpers.SoundDeviceStream(
-                sample_rate=audio_sample_rate,
-                sample_width=audio_sample_width,
-                block_size=audio_block_size,
-                flush_size=audio_flush_size
-            )
+    )
+    audio_sink = audio_device = (
+        audio_device or audio_helpers.SoundDeviceStream(
+            sample_rate=audio_helpers.DEFAULT_AUDIO_SAMPLE_RATE,
+            sample_width=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
+            block_size=audio_helpers.DEFAULT_AUDIO_DEVICE_BLOCK_SIZE,
+            flush_size=audio_helpers.DEFAULT_AUDIO_DEVICE_FLUSH_SIZE
         )
-    if output_audio_file:
-        audio_sink = audio_helpers.WaveSink(
-            open(output_audio_file, 'wb'),
-            sample_rate=audio_sample_rate,
-            sample_width=audio_sample_width
-        )
-    else:
-        audio_sink = audio_device = (
-            audio_device or audio_helpers.SoundDeviceStream(
-                sample_rate=audio_sample_rate,
-                sample_width=audio_sample_width,
-                block_size=audio_block_size,
-                flush_size=audio_flush_size
-            )
-        )
+    )
     # Create conversation stream with the given audio source and sink.
     conversation_stream = audio_helpers.ConversationStream(
         source=audio_source,
         sink=audio_sink,
-        iter_size=audio_iter_size,
-        sample_width=audio_sample_width,
+        iter_size=audio_helpers.DEFAULT_AUDIO_ITER_SIZE,
+        sample_width=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
     )
 
-    with SampleAssistant(conversation_stream,
-                         grpc_channel, grpc_deadline) as assistant:
-        # If file arguments are supplied:
-        # exit after the first turn of the conversation.
-        if input_audio_file or output_audio_file:
-            assistant.converse()
-            return
-
-        # If no file arguments supplied:
-        # keep recording voice requests using the microphone
-        # and playing back assistant response using the speaker.
-        # When the once flag is set, don't wait for a trigger. Otherwise, wait.
-        wait_for_user_trigger = not once
-        while True:
-            if wait_for_user_trigger:
-                pause_for_user_input()
-
-            continue_conversation = assistant.converse()
-            # wait for user trigger if there is no follow-up turn in
-            # the conversation.
-            wait_for_user_trigger = not continue_conversation
-
-            # If we only want one conversation, break.
-            if once and (not continue_conversation):
-                break
+    with SampleAssistant(conversation_stream, grpc_channel, DEFAULT_GRPC_DEADLINE) as assistant:
+        push_button.wait_for_push(trigger_assistant, assistant)
 
 
-def pause_for_user_input():
-    print("press red button to start an assistant")
-    push_button.pause_for_user_input()
+def trigger_assistant(assistant):
+    while True:
+        if assistant.converse():
+            continue
+        else:
+            break
+
+
+def print_credentials_error(e):
+    logging.error('Error loading credentials: %s', e)
+    logging.error('Run google-oauthlib-tool to initialize new OAuth 2.0 credentials.')
 
 
 if __name__ == '__main__':

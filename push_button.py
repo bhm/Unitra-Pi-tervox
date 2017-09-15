@@ -17,14 +17,16 @@ class PushButton(object):
         self.button_type = button_type
         self.gpio_inited = False
 
-    def pause_for_user_input(self):
+    def wait_for_push(self, do_on_push, do_on_push_args):
         if not self.gpio_inited:
             self.init_gpio()
 
         while True:
             if GPIO.input(self.button_gpio_pin):
                 print('Push button at %s activated' % self.button_gpio_pin)
-                return
+                if do_on_push is not None:
+                    do_on_push(do_on_push_args)
+
             sleep(self.sleep_time)
 
     def init_gpio(self):
