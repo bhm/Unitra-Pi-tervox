@@ -24,6 +24,46 @@ Script implements the following features:
 -   Conversation state management
 -   Volume control
 
+Release log
+=======
+
+##### 1.0
+- Refactor
+- Document setup steps
+- Trigger conversation on GPIO pull up
+- Breathing led class *coughed* up
+
+##### 1.2
+- Boot sound!
+- Redo triggering conversation
+- Refactor the pushable button
+- Param option for boot sound
+- Param for no boot sound
+
+Road Map
+======
+
+#### General
+- Simple script installing it from scratch
+
+##### 1.2.1
+- Add param option for GPIO button pin
+
+##### 1.3
+- Add breathing LEDs indicating the device is listening
+- Add booting LEDs animation
+
+##### 1.4
+- Add sounds for start and end listening
+- Add sound for nothing played back
+
+##### 1.5
+- Add LEDs option for IFTTT functionality or custom commands
+
+##### 1.6
+- Try adding Alexa or Snowboy
+
+
 Prerequisites
 =============
 
