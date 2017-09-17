@@ -31,6 +31,7 @@ from tenacity import retry, stop_after_attempt, retry_if_exception
 
 from breathing_led import BreathingLed
 from push_button import PushButton
+from push_button import PushButtonType
 from boot_sound import BootSound
 
 try:
@@ -53,7 +54,6 @@ PUSH_TO_TALK_BUTTON_SLEEP = 0.05
 
 RED_BREATHING_LED_PIN = 18
 red_breathing_led = BreathingLed(RED_BREATHING_LED_PIN)
-push_button = PushButton(PUSH_TO_TALK_BUTTON_PIN)
 gpio_setup_done = False
 
 
@@ -190,22 +190,31 @@ class SampleAssistant(object):
 
 
 @click.command()
-@click.option('--api-endpoint', default=ASSISTANT_API_ENDPOINT,
-              metavar='<api endpoint>', show_default=True,
+@click.option('--api-endpoint',
+              default=ASSISTANT_API_ENDPOINT, metavar='<api endpoint>', show_default=True,
               help='Address of Google Assistant API service.')
 @click.option('--credentials',
               metavar='<credentials>', show_default=True,
               default=os.path.join(click.get_app_dir('google-oauthlib-tool'), 'credentials.json'),
               help='Path to read OAuth2 credentials.')
-@click.option('--verbose', '-v', is_flag=True, default=False,
+@click.option('--push-gpio-pin', '-pgp',
+              metavar='<push gpio pin>', default=PushButton.DEFAULT_GPIO_PIN, show_default=True,
+              help='GPIO pin button(GPIO.BCM, GPIO.IN config) that triggers recording')
+@click.option('--button-normally-open', '-bno',
+              metavar='<button normally open>', default=False, show_default=True, is_flag=True,
+              help='Circuit specific ')
+@click.option('--verbose', '-v',
+              is_flag=True, default=False,
               help='Verbose logging.')
-@click.option('--no-boot-sound', default=False, is_flag=True,
-              help='Stop playing boot sound')
-@click.option('--boot-sound', '-bs', default=BootSound.DEFAULT_BOOT_FILE,
-              metavar='<boot sound>',
-              is_flag=False,
+@click.option('--no-boot-sound', '-nbs',
+              is_flag=True, default=False,
+              help='Do not play boot sound. Takes priority over boot sound option.')
+@click.option('--boot-sound', '-bs',
+              metavar='<boot sound>', default=BootSound.DEFAULT_BOOT_FILE,
               help='Boot sound to play')
 def main(
+        push_gpio_pin,
+        button_normally_open,
         verbose,
         no_boot_sound,
         boot_sound,
@@ -213,6 +222,13 @@ def main(
 ):
     # Setup logging.
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
+
+    # Button setup
+    push_button = PushButton(
+        push_gpio_pin,
+        button_type=PushButtonType.NO if button_normally_open else PushButtonType.NC,
+        verbose=verbose
+    )
 
     # play on boot
     if no_boot_sound:

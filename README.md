@@ -5,24 +5,16 @@ This repository a forked and modified code of the reference sample for
 the `google-assistant-grpc` Python
 [package](https://pypi.python.org/pypi/google-assistant-grpc).
 
-This runs as a service on a Raspberry Pi Zero W.
-
-Raspi sits nicely with an old Unitra Intervox box.
-
-It needs a fresh set of paint.
-
-Some logo redesign.
-
-And a push button to switch to Alexa.
+This runs as a service on a Raspberry Pi Zero W. Raspi sits nicely with an old Unitra Intervox box.
+Now it needs a fresh set of paint. Some logo redesign. And a switch between Google Assistant and Alexa.
 
 Script implements the following features:
 
--   Triggering a conversation on pull up on the GPIO 014
+-   Triggering a conversation on pull up on a GPIO
 -   Audio recording of user queries (single or multiple consecutive
     queries)
 -   Playback of the Assistant response
 -   Conversation state management
--   Volume control
 
 Release log
 =======
@@ -40,14 +32,18 @@ Release log
 - Param option for boot sound
 - Param for no boot sound
 
+##### 1.2.1
+- GPIO pin for recroding button now can be supplied via command line option
+- Button triggering recording can now be configured as Normally Open Or Closed
+- `--verbose/-v` flag now controls `GPIO.setwarnings()` in `PushButton` class
+- Update readme with steps to setup service
+
+
 Road Map
 ======
 
 #### General
 - Simple script installing it from scratch
-
-##### 1.2.1
-- Add param option for GPIO button pin
 
 ##### 1.3
 - Add breathing LEDs indicating the device is listening
@@ -114,14 +110,31 @@ Setup
             }
             
 
--   Service
-    :   -   copy run\_piterkom.sh to /opt
-        -   give it run permissions
-        -   copy piterko.service to /etc/systemd/system
-        -   you may want to reload the daemon via \`sudo systemctl
-            daemon-reload
-        -   enable service via sudo systemctl enable piterkom.service
-        -   start it up sudo systemctl start piterkom.service
+##### Service setup
+   
+    - ssh into the Pi (check wpa_injector script to setup an Image before hand)
+    - Create pi-terkom directory    
+    - Cd into it    
+    - Clone this repo
+    - copy `run_piterkom.sh` to /opt
+    - give the script run permissions
+    - copy piterkom.service to /etc/systemd/system
+    - you may want to reload the systemd daemon
+    - enable service via sudo systemctl enable piterkom.service
+    - start up the service now reboot `reboot now & exit`
+    
+##### Snippet for service setup
+   
+    mkdir pi-terkom
+    git clone git@github.com:bhm/Unitra-Pi-tervox.git
+    cd Unitra-Pi-tervox
+    cp run_piterkom.sh /opt
+    chmod ug+x /opt/run_piterkom.sh
+    cp piterkom.service /etc/systemd/system
+    systemctl daemon-reload
+    systemctl enable piterkom.service
+    systemctl start piterkom.service
+    
 
 Authorization
 =============
