@@ -38,6 +38,12 @@ Release log
 - `--verbose/-v` flag now controls `GPIO.setwarnings()` in `PushButton` class
 - Update readme with steps to setup service
 
+##### 1.3
+- Add sound for start conversation
+- Add sound for finished conversation
+- Add command line option for start conversation sound file
+- Add command line option for end conversation sound file
+
 
 Road Map
 ======
@@ -45,18 +51,26 @@ Road Map
 #### General
 - Simple script installing it from scratch
 
-##### 1.3
+##### 1.3.1
+- Add default sound directories
+
+##### 1.3.3
+- Add default sounds array
+
+##### 1.3.3
+- Add sound dirs command line option
+
+##### 1.4
 - Add breathing LEDs indicating the device is listening
 - Add booting LEDs animation
 
-##### 1.4
-- Add sounds for start and end listening
+##### 1.5
 - Add sound for nothing played back
 
-##### 1.5
+##### 1.6
 - Add LEDs option for IFTTT functionality or custom commands
 
-##### 1.6
+##### 1.7
 - Try adding Alexa or Snowboy
 
 

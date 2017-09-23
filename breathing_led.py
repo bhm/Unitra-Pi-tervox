@@ -1,4 +1,3 @@
-import multiprocessing
 
 import RPi.GPIO as GPIO
 from time import sleep
@@ -9,7 +8,7 @@ class BreathingLed(object):
     def __init__(self, led_pin=12, hertz=100, cycle_time=1):
         self.led = None
         self.hertz = hertz
-        self.sleep_time = (cycle_time / 1000) * (hertz / 8)
+        self.sleep_time = (cycle_time * 1000) / (hertz * 2)
         self.led_pin = led_pin
         self.setup_done = False
         self.keep_breathing = False

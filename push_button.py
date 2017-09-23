@@ -10,6 +10,10 @@ class PushButtonType(Enum):
     NC = 1  # normally CLOSED
     NO = 2  # normally OPEN
 
+    def is_triggered(self, gpio_high):
+        return (self == PushButtonType.NC and gpio_high) or \
+               (self == PushButtonType.NO and not gpio_high)
+
 
 class PushButton(object):
     DEFAULT_GPIO_PIN = 14
@@ -28,24 +32,22 @@ class PushButton(object):
         self.verbose = verbose
         logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
-    def wait_for_push(self, do_on_push, do_on_push_args):
+    def wait_for_push(self, do_on_push, **kwargs):
         if not self.gpio_inited:
             self.init_gpio()
 
         while True:
-            gpio_high = GPIO.input(self.button_gpio_pin)
+            gpio_is_high = GPIO.input(self.button_gpio_pin)
 
-            if self.button_type is PushButtonType.NC and gpio_high:
-                self.trigger_push(do_on_push, do_on_push_args)
-            elif self.button_type is PushButtonType.NO and not gpio_high:
-                self.trigger_push(do_on_push, do_on_push_args)
+            if self.button_type.is_triggered(gpio_is_high):
+                self.__trigger(do_on_push, **kwargs)
 
             sleep(self.sleep_time)
 
-    def trigger_push(self, do_on_push, do_on_push_args):
-        logging.debug('Push button at %s activated' % self.button_gpio_pin)
+    def __trigger(self, do_on_push, **kwargs):
         if do_on_push is not None:
-            do_on_push(do_on_push_args)
+            logging.debug('Push button at %s activated' % self.button_gpio_pin)
+            do_on_push(**kwargs)
 
     def init_gpio(self):
         GPIO.setmode(GPIO.BCM)
