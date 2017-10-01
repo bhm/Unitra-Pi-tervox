@@ -33,6 +33,7 @@ from breathing_led import BreathingLed
 from push_button import PushButton
 from push_button import PushButtonType
 from boot_sound import BootSound
+from playable_file import PlayableFile
 
 try:
     from . import (
@@ -212,19 +213,27 @@ class SampleAssistant(object):
 @click.option('--boot-sound', '-bs',
               metavar='<boot sound>', default=BootSound.DEFAULT_BOOT_FILE,
               help='Boot sound to play')
+@click.option('--conversation-bleep-start', '-cbs',
+              metavar='<conversation bleep start>', default=None,
+              help='Sound to play when device is listening')
+@click.option('--conversation-bleep-end', '-cbe',
+              metavar='<conversation bleep end>', default=None,
+              help='Sound to play when device has finished the conversation')
 def main(
         push_gpio_pin,
         button_normally_open,
         verbose,
         no_boot_sound,
         boot_sound,
+        conversation_bleep_start,
+        conversation_bleep_end,
         *args, **kwargs
 ):
     # Setup logging.
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
     # Button setup
-    push_button = PushButton(
+    trigger_conversation_button = PushButton(
         push_gpio_pin,
         button_type=PushButtonType.NO if button_normally_open else PushButtonType.NC,
         verbose=verbose
@@ -232,7 +241,7 @@ def main(
 
     # play on boot
     if no_boot_sound:
-        logging.info('Not playing boot sound')
+        logging.info('Not playing a boot sound')
     else:
         BootSound(boot_sound).play()
 
@@ -254,6 +263,24 @@ def main(
     )
     logging.info('Connecting to %s', ASSISTANT_API_ENDPOINT)
 
+    conversation_start_bleep = playable_file_for(conversation_bleep_start)
+    conversation_end_bleep = playable_file_for(conversation_bleep_end)
+
+    trigger_conversation_button.wait_for_push(
+        converse_with_assistant,
+        create_stream=create_conversation_stream,
+        channel=grpc_channel,
+        deadline=DEFAULT_GRPC_DEADLINE,
+        bleep_start=conversation_start_bleep,
+        bleep_end=conversation_end_bleep
+    )
+
+
+def playable_file_for(file):
+    return PlayableFile(file, silent_fail=True) if file is not None else None
+
+
+def create_conversation_stream():
     # Configure audio source and sink.
     audio_device = None
     audio_source = audio_device = (
@@ -264,7 +291,7 @@ def main(
             flush_size=audio_helpers.DEFAULT_AUDIO_DEVICE_FLUSH_SIZE
         )
     )
-    audio_sink = audio_device = (
+    audio_sink = (
         audio_device or audio_helpers.SoundDeviceStream(
             sample_rate=audio_helpers.DEFAULT_AUDIO_SAMPLE_RATE,
             sample_width=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
@@ -279,17 +306,35 @@ def main(
         iter_size=audio_helpers.DEFAULT_AUDIO_ITER_SIZE,
         sample_width=audio_helpers.DEFAULT_AUDIO_SAMPLE_WIDTH,
     )
+    return conversation_stream
 
-    with SampleAssistant(conversation_stream, grpc_channel, DEFAULT_GRPC_DEADLINE) as assistant:
-        push_button.wait_for_push(trigger_assistant, assistant)
+
+def converse_with_assistant(
+        create_stream,
+        channel,
+        deadline,
+        bleep_start=None,
+        bleep_end=None
+):
+    if bleep_start:
+        bleep_start.play()
+
+    with SampleAssistant(
+            conversation_stream=create_stream(),
+            channel=channel,
+            deadline_sec=deadline
+    ) as assistant:
+        trigger_assistant(assistant)
+
+    if bleep_end:
+        bleep_end.play()
 
 
 def trigger_assistant(assistant):
-    while True:
-        if assistant.converse():
-            continue
-        else:
-            break
+    while assistant.converse():
+        continue
+
+    assistant.conversation_stream.close()
 
 
 def print_credentials_error(e):
