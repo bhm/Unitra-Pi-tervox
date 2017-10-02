@@ -29,7 +29,6 @@ from google.assistant.embedded.v1alpha1 import embedded_assistant_pb2
 from google.rpc import code_pb2
 from tenacity import retry, stop_after_attempt, retry_if_exception
 
-from breathing_led import BreathingLed
 from push_button import PushButton
 from push_button import PushButtonType
 from boot_sound import BootSound
@@ -53,8 +52,6 @@ DEFAULT_GRPC_DEADLINE = 60 * 3 + 5
 PUSH_TO_TALK_BUTTON_PIN = 14
 PUSH_TO_TALK_BUTTON_SLEEP = 0.05
 
-RED_BREATHING_LED_PIN = 18
-red_breathing_led = BreathingLed(RED_BREATHING_LED_PIN)
 gpio_setup_done = False
 
 
@@ -109,7 +106,6 @@ class SampleAssistant(object):
         continue_conversation = False
 
         self.conversation_stream.start_recording()
-        red_breathing_led.start_breathing()
         logging.info('Recording audio request.')
 
         def iter_converse_requests():
@@ -129,7 +125,6 @@ class SampleAssistant(object):
             if resp.event_type == END_OF_UTTERANCE:
                 logging.info('End of audio request detected')
                 self.conversation_stream.stop_recording()
-                red_breathing_led.stop()
             if resp.result.spoken_request_text:
                 self.print_spoken_request(resp)
             if len(resp.audio_out.audio_data) > 0:
